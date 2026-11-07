@@ -11,6 +11,10 @@ Initial installation over `/dev/tty.usbmodem1101`:
 - Read back Automatic Schedule = OFF, Pump = OFF, run = 60 s, rest = 15 min.
 - INA219 initialization failed; Battery Voltage and Battery Current are NaN,
   Power Monitor Healthy is false, and pump status is inhibited.
+- Final diagnostic build: I2C bus recovery succeeded, but the scan found no
+  devices on GPIO4/GPIO5. A brownout reset was observed during startup with
+  the pump disabled; check USB/regulator/battery supply stability. Brownout
+  protection remains enabled.
 - No manual pump run or automatic cycle was commanded during commissioning.
 - Home Assistant integration and history have not yet been verified.
 
