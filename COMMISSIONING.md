@@ -47,3 +47,26 @@ was connected, so verify direction under a known battery-only discharge load
 before interpreting discharge-only Energy Used. No pump run was commanded.
 A startup brownout occurred again before Wi-Fi connected. Changing I2C pins
 resolved detection but did not eliminate the observed supply/reset issue.
+
+## Firmware 0.2.0 — brownout setting and GPIO0 button
+
+At the owner's explicit request, disabled `CONFIG_ESP_BROWNOUT_DET` for this
+module. Verified the generated sdkconfig has the option unset. This does not
+fix supply instability; software battery/current checks remain enabled.
+
+Added a normally-open GPIO0-to-GND tactile input with an internal pull-up and
+40 ms debounce. Each press toggles a timed manual run, including cancellation
+of a queued start. Holding the input does not repeat. Automatic Schedule stays
+OFF; manual runs use the configured duration and existing safety checks.
+
+Host tests and ESPHome validation passed; firmware compiled and was flashed
+successfully. The encrypted API reports project version 0.2.0 and a released
+Pump Button input. A controlled test temporarily selected a five-second run:
+Pump changed OFF → ON → OFF, with exactly five seconds between the ON and OFF
+state reports. No safety trip or API disconnect occurred during the test.
+The original 60-second run duration was restored and confirmed via the API.
+
+The sample remained about 3.964 V and -0.117 A throughout; there was no clear
+battery-side load increase. GPIO output commands alone do not establish
+USB-A output voltage or actual pump operation. Physical button/pump operation
+and a USB-A voltage-under-load check are pending the owner's observations.

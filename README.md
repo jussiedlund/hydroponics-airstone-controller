@@ -5,7 +5,10 @@ an INA219 measuring the total battery load, and an active-high GPIO18 MOSFET
 pump switch. The controller stays awake on Wi-Fi for live Home Assistant
 control and telemetry. Based on the neighboring Tower Controller's ESP-IDF,
 encrypted native API, and pump-off boot conventions; this project does not
-inherit its deep-sleep cycle or board-specific brownout workaround.
+inherit its deep-sleep cycle. At the owner's request, the internal brownout
+detector is disabled for this module after repeat startup resets. The INA219
+software battery cutoff remains enabled; external cell/BMS protection is still
+required. This setting does not correct a weak power supply.
 
 See [COMMISSIONING.md](COMMISSIONING.md) for observed installation results and
 the successful GPIO6/GPIO7 scan and remaining supply/current-direction checks.
@@ -75,6 +78,24 @@ minutes behind after abrupt power loss. During INA219 outages the energy
 integral is paused after a five-second stale timeout, so gaps undercount real
 usage; the timeout can still integrate up to five seconds of the last value.
 
+## Physical button and USB-A test
+
+Connect the normally-open tactile switch between GPIO0 and GND. The input is
+active low with an internal pull-up and 40 ms debounce. One press requests a
+timed run using Pump Run Time (60 seconds by default); another press stops it.
+Holding the button does not repeat. It works without Home Assistant and uses
+the same INA219 checks, battery cutoff and maximum run time as other controls.
+It is ignored during OTA. A stop begins a new rest period if the automatic
+schedule is enabled; disable the schedule to keep the pump stopped.
+
+For a USB-A output test, leave Automatic Schedule OFF, connect the intended
+pump/load and press the button. Confirm the load actually operates, measure
+USB-A VBUS to USB-A GND for about 5 V under load, and press again to stop.
+Firmware can confirm GPIO18 was commanded HIGH and show battery-side power;
+it cannot directly measure the USB-A output voltage. Whether USB-A itself
+switches depends on whether GPIO18 gates the boost input or only the pump.
+Do not connect the boost USB-A output to the computer as a test load.
+
 ## Wiring and measurement
 
 | Connection | Pin / route |
@@ -86,6 +107,7 @@ usage; the timeout can still integrate up to five seconds of the last value.
 | INA219 VIN+ | Protected battery positive |
 | INA219 VIN- | Positive supply feeding **both** ESP32 regulator and boost |
 | MOSFET gate control | GPIO18, HIGH = on |
+| Tactile pump button | GPIO0 to GND, normally open; internal pull-up |
 
 The VIN- load bus voltage plus the signed shunt drop gives battery-side VIN+
 voltage. Battery Power is that voltage multiplied by signed current; positive

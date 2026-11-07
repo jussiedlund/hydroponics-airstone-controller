@@ -18,6 +18,15 @@ class PumpController {
     last_stop_ = now;
     has_stopped_ = true;
   }
+  // Cancel a queued start too, even if a second press arrives before tick().
+  bool toggle(uint32_t now) {
+    if (running || manual_requested_) {
+      stop(now);
+      return false;
+    }
+    request_run();
+    return true;
+  }
   bool clear_fault(bool healthy, uint32_t now) {
     if (!healthy) return false;
     fault = false;

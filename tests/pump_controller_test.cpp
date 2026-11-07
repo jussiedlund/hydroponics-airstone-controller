@@ -60,6 +60,18 @@ int main() {
   enabled.schedule_now();
   assert(tick(enabled, 2));
 
+  PumpController physical;
+  assert(physical.toggle(0));
+  assert(!physical.toggle(1));  // Second press cancels a queued start.
+  assert(!tick(physical, 2, false));
+  assert(physical.toggle(3));
+  assert(tick(physical, 4, false));
+  assert(!physical.toggle(5));  // Second press stops a running pump.
+  assert(!tick(physical, 6, false));
+  assert(physical.toggle(7));
+  assert(!tick(physical, 8, false, true, 3.2f)); // Physical input respects cutoff.
+  assert(!tick(physical, 9, false));
+
   PumpController ceiling;
   assert(tick(ceiling, 0, false) == false);
   ceiling.request_run();

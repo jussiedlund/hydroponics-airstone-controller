@@ -4,6 +4,7 @@ substitutions:
   i2c_sda_pin: GPIO6
   i2c_scl_pin: GPIO7
   pump_pin: GPIO18
+  manual_button_pin: GPIO0
   ina219_address: "0x40"
   shunt_resistance: "0.1 ohm"  # R100; verify the actual board marking.
   battery_cutoff: "3.30"
@@ -22,7 +23,7 @@ esphome:
     - pump_controller.h
   project:
     name: hydroponics.air_stone_controller
-    version: "0.1.0"
+    version: "0.2.0"
   on_boot:
     priority: 700
     then:
@@ -37,6 +38,9 @@ esp32:
   flash_size: 4MB
   framework:
     type: esp-idf
+    sdkconfig_options:
+      # Explicitly requested for this module after repeat startup resets.
+      CONFIG_ESP_BROWNOUT_DET: "n"
 
 logger:
   # Keep startup I2C scan diagnostics; suppress per-sample telemetry chatter.
@@ -269,6 +273,24 @@ sensor:
     entity_category: diagnostic
 
 binary_sensor:
+  - platform: gpio
+    name: Pump Button
+    id: physical_pump_button
+    pin:
+      number: ${manual_button_pin}
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on_off: 40ms
+    on_press:
+      then:
+        - lambda: |-
+            if (id(maintenance)) return;
+            const bool start = id(controller).toggle(millis());
+            if (!start) id(pump_output).turn_off();
+            ESP_LOGI("pump", "GPIO0 button: %s", start ? "timed run requested" : "stopped");
   - platform: status
     name: Online
   - platform: template
