@@ -21,13 +21,32 @@ esphome:
     # Angle form places the type before generated globals; path form copies it.
     - <pump_controller.h>
     - pump_controller.h
+    - solar_schedule.h
   project:
     name: hydroponics.air_stone_controller
-    version: "0.3.0"
+    version: "0.4.0"
   on_boot:
-    priority: 700
-    then:
-      - switch.turn_off: pump_output
+    - priority: 700
+      then:
+        - switch.turn_off: pump_output
+    - priority: -100
+      then:
+        - if:
+            condition:
+              lambda: return !id(solar_settings_applied);
+            then:
+              - number.set:
+                  id: run_seconds
+                  value: 15
+              - number.set:
+                  id: rest_minutes
+                  value: 10
+              - lambda: id(solar_settings_applied) = true;
+        - lambda: |-
+            id(controller).fault = id(saved_safety_trip);
+            id(controller).schedule_now();
+            id(awake_since) = id(last_activity) = millis();
+            id(solar_ready) = true;
   on_shutdown:
     priority: 700
     then:
@@ -55,6 +74,7 @@ logger:
     api: INFO
 
 api:
+  id: api_server
   encryption:
     key: !secret api_encryption_key
   # Continue the local schedule if Home Assistant is offline.
@@ -67,6 +87,7 @@ ota:
       then:
         - lambda: |-
             id(maintenance) = true;
+            id(dose_started) = true;
             id(controller).stop(millis());
         - switch.turn_off: pump_output
     on_error:
@@ -78,6 +99,30 @@ wifi:
   password: !secret wifi_password
   power_save_mode: light
   reboot_timeout: 0s
+
+time:
+  - platform: homeassistant
+    id: local_clock
+    timezone: Asia/Singapore
+
+deep_sleep:
+  id: solar_sleep
+  sleep_duration: 60min
+  wakeup_pin:
+    number: ${manual_button_pin}
+    inverted: true
+    mode:
+      input: true
+      pullup: true
+    allow_other_uses: true
+  wakeup_pin_mode: KEEP_AWAKE
+  on_wake:
+    then:
+      - lambda: |-
+          if (cause == deep_sleep::WAKEUP_CAUSE_GPIO) {
+            id(button_wake) = true;
+            id(dose_started) = true;
+          }
 
 preferences:
   flash_write_interval: 5min
@@ -101,6 +146,35 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'false'
+  # 0.3.0 held its safety trip in RAM; require an explicit clear on first
+  # solar boot so the OTA migration cannot silently bypass that prior trip.
+  - id: saved_safety_trip
+    type: bool
+    restore_value: true
+    initial_value: 'true'
+    update_interval: 250ms
+  - id: solar_settings_applied
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+  - id: awake_since
+    type: uint32_t
+    initial_value: '0'
+  - id: last_activity
+    type: uint32_t
+    initial_value: '0'
+  - id: solar_ready
+    type: bool
+    initial_value: 'false'
+  - id: dose_started
+    type: bool
+    initial_value: 'false'
+  - id: button_wake
+    type: bool
+    initial_value: 'false'
+  - id: hold_awake_since
+    type: uint32_t
+    initial_value: '0'
   - id: maintenance
     type: bool
     restore_value: false
@@ -119,10 +193,21 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
     entity_category: config
     turn_on_action:
-      - lambda: id(controller).schedule_now();
+      - lambda: |-
+          if (!id(solar_ready)) return;
+          id(dose_started) = false;
+          id(controller).schedule_now();
     turn_off_action:
-      - lambda: id(controller).stop(millis());
-      - switch.turn_off: pump_output
+      - script.execute: stop_current_cycle
+  - platform: template
+    name: Stay Awake
+    id: stay_awake
+    icon: mdi:sleep-off
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    entity_category: config
+    turn_on_action:
+      - lambda: id(hold_awake_since) = millis();
   - platform: template
     name: Pump
     id: pump_control
@@ -131,7 +216,22 @@ switch:
     turn_on_action:
       - lambda: id(controller).request_run();
     turn_off_action:
-      - lambda: id(controller).stop(millis());
+      - script.execute: stop_current_cycle
+
+script:
+  - id: persist_safety_trip
+    then:
+      - lambda: |-
+          // Store the changed latch before flushing NVS, even if power is
+          // removed before the normal deep-sleep shutdown.
+          saved_safety_trip->update();
+          global_preferences->sync();
+  - id: stop_current_cycle
+    then:
+      - lambda: |-
+          id(controller).stop(millis());
+          id(dose_started) = true;
+          id(last_activity) = millis();
       - switch.turn_off: pump_output
 
 number:
@@ -140,7 +240,7 @@ number:
     id: run_seconds
     optimistic: true
     restore_value: true
-    initial_value: 60
+    initial_value: 15
     min_value: 5
     max_value: 1800
     step: 5
@@ -152,7 +252,7 @@ number:
     id: rest_minutes
     optimistic: true
     restore_value: true
-    initial_value: 15
+    initial_value: 10
     min_value: 1
     max_value: 1440
     step: 1
@@ -170,8 +270,7 @@ button:
     name: Stop Pump
     icon: mdi:stop
     on_press:
-      - lambda: id(controller).stop(millis());
-      - switch.turn_off: pump_output
+      - script.execute: stop_current_cycle
   - platform: template
     name: Clear Safety Trip
     entity_category: config
@@ -184,8 +283,14 @@ button:
               id(battery_voltage).state <= 4.35f &&
               std::isfinite(id(battery_current).state) &&
               std::fabs(id(battery_current).state) < ${current_limit};
-          if (!id(controller).clear_fault(healthy, millis()))
+          if (id(controller).clear_fault(healthy, millis())) {
+            id(saved_safety_trip) = false;
+            id(persist_safety_trip).execute();
+            id(dose_started) = true;
+            id(last_activity) = millis();
+          } else {
             ESP_LOGW("pump", "Cannot clear: need fresh INA219, battery >= ${battery_recovery} V and safe current");
+          }
   - platform: restart
     name: Restart
     entity_category: diagnostic
@@ -288,6 +393,12 @@ sensor:
     device_class: energy
     state_class: total_increasing
     accuracy_decimals: 4
+  - platform: template
+    name: Next Sleep Duration
+    id: next_sleep_duration
+    unit_of_measurement: min
+    accuracy_decimals: 0
+    update_interval: never
   - platform: wifi_signal
     name: WiFi Signal
     update_interval: 60s
@@ -303,6 +414,7 @@ binary_sensor:
     id: physical_pump_button
     pin:
       number: ${manual_button_pin}
+      allow_other_uses: true
       mode:
         input: true
         pullup: true
@@ -312,9 +424,9 @@ binary_sensor:
     on_press:
       then:
         - lambda: |-
-            if (id(maintenance)) return;
+            if (!id(solar_ready) || id(maintenance)) return;
             const bool start = id(controller).toggle(millis());
-            if (!start) id(pump_output).turn_off();
+            if (!start) id(stop_current_cycle).execute();
             ESP_LOGI("pump", "GPIO0 button: %s", start ? "timed run requested" : "stopped");
   - platform: status
     name: Online
@@ -339,6 +451,10 @@ text_sensor:
     name: Pump Status
     lambda: return {id(controller).status};
     update_interval: 1s
+  - platform: template
+    name: Solar Sleep Profile
+    id: solar_sleep_profile
+    update_interval: never
   - platform: wifi_info
     ip_address:
       name: IP Address
@@ -348,11 +464,15 @@ interval:
   - interval: 250ms
     then:
       - lambda: |-
+          if (!id(solar_ready)) return;
           if (id(maintenance)) {
             id(pump_output).turn_off();
             return;
           }
-          const bool fresh = id(sample_seen) && millis() - id(last_sample_ms) < 5000U;
+          const auto now = millis();
+          const bool fresh = id(sample_seen) && now - id(last_sample_ms) < 5000U;
+          if (id(stay_awake).state && now - id(hold_awake_since) >= 600000U)
+            id(stay_awake).turn_off();
           // Do not extrapolate the last power measurement across a sensor outage.
           if (!fresh && id(discharge_power).state != 0.0f) {
             id(discharge_power).publish_state(0.0f);
@@ -360,13 +480,52 @@ interval:
             id(battery_voltage).publish_state(NAN);
             id(battery_current).publish_state(NAN);
           }
-          const bool run = id(controller).tick(millis(), id(automatic_schedule).state,
-              uint32_t(id(run_seconds).state * 1000.0f),
-              uint32_t(id(rest_minutes).state * 60000.0f), fresh,
+          auto &pump = id(controller);
+          const bool auto_due = id(automatic_schedule).state && !id(dose_started);
+          const bool run = pump.tick(now, auto_due,
+              uint32_t(id(run_seconds).state * 1000.0f), 0, fresh,
               id(battery_voltage).state, id(battery_current).state,
-              ${battery_cutoff}, ${current_limit});
+              ${battery_cutoff}, ${current_limit}, air_stone::SOLAR_MIN_VOLTAGE);
           if (run != id(pump_output).state) {
-            if (run) id(pump_output).turn_on();
-            else id(pump_output).turn_off();
-            ESP_LOGI("pump", "%s", id(controller).status);
+            if (run) {
+              id(dose_started) = true;
+              id(pump_output).turn_on();
+            } else {
+              id(pump_output).turn_off();
+            }
+            id(last_activity) = now;
+            ESP_LOGI("pump", "%s", pump.status);
           }
+          if (id(saved_safety_trip) != pump.fault) {
+            id(saved_safety_trip) = pump.fault;
+            id(persist_safety_trip).execute();
+          }
+          if (run || pump.pending()) id(last_activity) = now;
+
+          // Use the pre-load average if a dose ran; otherwise use the current
+          // rested sample. A failed monitor always gets the long fallback.
+          const float current = id(battery_current).state;
+          const bool monitor_valid = fresh && std::isfinite(current) &&
+              std::fabs(current) < ${current_limit};
+          const float rested = !monitor_valid ? NAN : std::isfinite(pump.resting_voltage)
+              ? pump.resting_voltage : id(battery_voltage).state;
+          const auto clock = id(local_clock).now();
+          const auto sleep = air_stone::select_sleep(rested, pump.fault,
+              clock.is_valid() ? clock.hour : -1, uint32_t(id(rest_minutes).state));
+          if (id(next_sleep_duration).state != float(sleep.minutes))
+            id(next_sleep_duration).publish_state(sleep.minutes);
+          if (id(solar_sleep_profile).state != sleep.reason)
+            id(solar_sleep_profile).publish_state(sleep.reason);
+
+          // Budget Wi-Fi/HA time without making it a dependency for pumping.
+          // The physical wake button opens a longer maintenance window.
+          if (id(stay_awake).state || run || pump.pending() ||
+              id(physical_pump_button).state ||
+              now - id(awake_since) < (id(button_wake) ? 60000U : 20000U)) return;
+          const uint32_t report_time = id(api_server).is_connected_with_state_subscription()
+              ? 5000U : 25000U;
+          if (now - id(last_activity) < report_time) return;
+          id(pump_output).turn_off();
+          ESP_LOGI("solar", "Deep sleeping for %u min: %s", static_cast<unsigned>(sleep.minutes), sleep.reason);
+          id(solar_sleep).set_sleep_duration(sleep.minutes * 60000U);
+          id(solar_sleep).begin_sleep(true);

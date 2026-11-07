@@ -1,4 +1,5 @@
 #include "../pump_controller.h"
+#include "../solar_schedule.h"
 #include <cassert>
 #include <limits>
 
@@ -20,6 +21,31 @@ static void start(PumpController &c, uint32_t now, bool automatic = true,
 }
 
 int main() {
+  using air_stone::select_sleep;
+  assert(select_sleep(3.70f, false, 7, 10).minutes == 10);
+  assert(select_sleep(3.90f, false, 18, 10).minutes == 10);
+  assert(select_sleep(3.90f, false, 19, 10).minutes == 30);
+  assert(select_sleep(3.90f, false, 6, 10).minutes == 30);
+  assert(select_sleep(3.69f, false, 12, 10).minutes == 30);
+  assert(select_sleep(3.50f, false, 12, 10).minutes == 30);
+  assert(select_sleep(3.49f, false, 12, 10).minutes == 60);
+  assert(select_sleep(NAN, false, 12, 10).minutes == 60);
+  assert(select_sleep(4.1f, true, 12, 10).minutes == 60);
+  assert(select_sleep(4.1f, false, -1, 10).minutes == 30);
+
+  PumpController low;
+  low.request_run();
+  assert(!low.tick(0, true, 15000, 0, true, 3.49f, 0.2f,
+                   3.30f, 2.5f, air_stone::SOLAR_MIN_VOLTAGE));
+  assert(!low.pending());
+  PumpController loaded;
+  start(loaded, 0, true, 15000);
+  assert(loaded.tick(3100, false, 15000, 0, true, 3.40f, 0.2f,
+                     3.30f, 2.5f, air_stone::SOLAR_MIN_VOLTAGE));
+  assert(!loaded.tick(3200, false, 15000, 0, true, 3.29f, 0.2f,
+                      3.30f, 2.5f, air_stone::SOLAR_MIN_VOLTAGE));
+  assert(loaded.fault);
+
   PumpController c;
   assert(!tick(c, 0, false));
   assert(!tick(c, 1, true, false));

@@ -28,6 +28,8 @@ class PumpController {
 
   const char *status = "Waiting for INA219";
 
+  bool pending() const { return manual_requested_ || sampling_; }
+
   void schedule_now() { has_stopped_ = false; }
   void request_run() { manual_requested_ = true; }
   void stop(uint32_t now) {
@@ -53,8 +55,8 @@ class PumpController {
     return true;
   }
   bool tick(uint32_t now, bool automatic, uint32_t run_ms, uint32_t rest_ms,
-            bool fresh, float voltage, float current, float cutoff, float max_current) {
-    const bool healthy = fresh && std::isfinite(voltage) && voltage >= cutoff &&
+            bool fresh, float voltage, float current, float cutoff, float max_current, float start_cutoff = 0.0f) {
+    const bool healthy = fresh && std::isfinite(voltage) && voltage >= (running ? cutoff : std::fmax(cutoff, start_cutoff)) &&
                          voltage <= 4.35f && std::isfinite(current) &&
                          std::fabs(current) < max_current;
     if (running && !healthy) {
