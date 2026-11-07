@@ -1,0 +1,36 @@
+# Paste as a manual dashboard card. Adjust entity IDs to match your installation.
+type: vertical-stack
+cards:
+  - type: entities
+    title: Air Stone Controller
+    show_header_toggle: false
+    entities:
+      - switch.air_stone_controller_automatic_schedule
+      - number.air_stone_controller_pump_run_time
+      - number.air_stone_controller_pump_rest_time
+      - switch.air_stone_controller_pump
+      - button.air_stone_controller_run_pump_once
+      - button.air_stone_controller_stop_pump
+      - sensor.air_stone_controller_pump_status
+      - binary_sensor.air_stone_controller_safety_trip
+      - button.air_stone_controller_clear_safety_trip
+      - binary_sensor.air_stone_controller_power_monitor_healthy
+      - sensor.air_stone_controller_battery_voltage
+      - sensor.air_stone_controller_battery_current
+      - sensor.air_stone_controller_battery_power
+      - sensor.air_stone_controller_energy_used
+  - type: history-graph
+    title: Battery voltage - 24 hours
+    hours_to_show: 24
+    entities:
+      - sensor.air_stone_controller_battery_voltage
+  - type: history-graph
+    title: Power - 24 hours
+    hours_to_show: 24
+    entities:
+      - sensor.air_stone_controller_battery_power
+  - type: history-graph
+    title: Pump operation - 24 hours
+    hours_to_show: 24
+    entities:
+      - binary_sensor.air_stone_controller_pump_output_active
