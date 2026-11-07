@@ -7,6 +7,9 @@ control and telemetry. Based on the neighboring Tower Controller's ESP-IDF,
 encrypted native API, and pump-off boot conventions; this project does not
 inherit its deep-sleep cycle or board-specific brownout workaround.
 
+See [COMMISSIONING.md](COMMISSIONING.md) for observed installation results and
+the outstanding INA219 wiring check.
+
 ## First use
 
 Local `secrets.yaml` already contains the Tower Controller's Wi-Fi credentials

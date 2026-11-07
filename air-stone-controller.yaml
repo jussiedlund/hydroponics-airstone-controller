@@ -39,8 +39,16 @@ esp32:
     type: esp-idf
 
 logger:
-  level: INFO
+  # Keep startup I2C scan diagnostics; suppress per-sample telemetry chatter.
+  level: DEBUG
   hardware_uart: USB_SERIAL_JTAG
+  logs:
+    sensor: INFO
+    text_sensor: INFO
+    binary_sensor: INFO
+    switch: INFO
+    wifi: INFO
+    api: INFO
 
 api:
   encryption:
