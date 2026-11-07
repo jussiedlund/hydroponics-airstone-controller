@@ -70,3 +70,17 @@ The sample remained about 3.964 V and -0.117 A throughout; there was no clear
 battery-side load increase. GPIO output commands alone do not establish
 USB-A output voltage or actual pump operation. Physical button/pump operation
 and a USB-A voltage-under-load check are pending the owner's observations.
+
+## Scheduled operation — 7 November 2026
+
+The owner confirmed 5 V at the USB-A output after the physical test. The
+controller rejoined Wi-Fi after a USB restart; the encrypted ESPHome API
+reported a healthy INA219 and no safety trip. Enabled Automatic Schedule
+with 60 seconds on and 15 minutes off. Verified the switch, both durations,
+and the first scheduled pump-on state via the API. A later read confirmed
+Pump = OFF, Pump Status = Resting, and no safety trip. The schedule runs
+on the controller independently of Home Assistant.
+
+Home Assistant discovered Air Stone Controller as an ESPHome device. The
+integration setup reached the encryption-key prompt; the key is in the
+local, untracked `secrets.yaml`. Keep it out of commissioning logs and Git.
