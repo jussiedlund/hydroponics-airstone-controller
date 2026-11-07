@@ -93,3 +93,17 @@ status, then enabled the pump about 3.1 seconds after the request. Home
 Assistant showed a 3.862 V resting average and 3.287 V loaded minimum: 0.575 V
 of measured sag. The 3.30 V safety cutoff stopped the pump and latched a trip.
 The trip was left set. Hydroponics shows all three voltage readings.
+
+## Firmware 0.4.0 — solar deep sleep
+
+Host tests cover day/night boundaries, both resting voltage thresholds,
+missing time/voltage, and the independent loaded cutoff. ESPHome validation,
+compilation and encrypted OTA succeeded on 7 November 2026.
+
+At 15:34:37 SGT Home Assistant saw the first solar wake: Run Time 15 s,
+Rest Time 10 min, Pump OFF, Safety Trip ON, and Solar Sleep Profile
+`Safety trip` with Next Sleep Duration 60 min. At 15:34:41 the controller
+disconnected cleanly and Home Assistant retained the last reported values,
+consistent with deep sleep. The first-boot latch was intentionally left set
+after the earlier 3.287 V loaded reading. A healthy daytime dose and the
+subsequent timer wake were not exercised during commissioning.
