@@ -84,3 +84,12 @@ on the controller independently of Home Assistant.
 Home Assistant discovered Air Stone Controller as an ESPHome device. The
 integration setup reached the encryption-key prompt; the key is in the
 local, untracked `secrets.yaml`. Keep it out of commissioning logs and Git.
+
+## Firmware 0.3.0 — pre-pump voltage and sag
+
+Built and deployed over encrypted OTA on 7 November 2026. Host tests and
+ESPHome validation passed. A live timed run reported the pre-start measurement
+status, then enabled the pump about 3.1 seconds after the request. Home
+Assistant showed a 3.862 V resting average and 3.287 V loaded minimum: 0.575 V
+of measured sag. The 3.30 V safety cutoff stopped the pump and latched a trip.
+The trip was left set. Hydroponics shows all three voltage readings.
