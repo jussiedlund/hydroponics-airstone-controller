@@ -8,6 +8,24 @@ class PumpController {
  public:
   bool running = false;
   bool fault = false;
+  float resting_voltage = NAN;
+  float loaded_min_voltage = NAN;
+  float voltage_sag() const {
+    if (!std::isfinite(loaded_min_voltage)) return NAN;
+    return std::fmax(0.0f, resting_voltage - loaded_min_voltage);
+  }
+
+  // Called once per complete INA219 sample, never once per scheduler tick.
+  void sample(uint32_t now, float voltage) {
+    if (!std::isfinite(voltage) || voltage <= 0.0f || voltage > 4.35f) return;
+    if (running && now - started_ >= 250U) {
+      loaded_min_voltage = std::fmin(loaded_min_voltage, voltage);
+    } else if (sampling_) {
+      baseline_sum_ += voltage;
+      ++baseline_count_;
+    }
+  }
+
   const char *status = "Waiting for INA219";
 
   void schedule_now() { has_stopped_ = false; }
@@ -15,12 +33,13 @@ class PumpController {
   void stop(uint32_t now) {
     running = false;
     manual_requested_ = false;
+    sampling_ = false;
     last_stop_ = now;
     has_stopped_ = true;
   }
   // Cancel a queued start too, even if a second press arrives before tick().
   bool toggle(uint32_t now) {
-    if (running || manual_requested_) {
+    if (running || manual_requested_ || sampling_) {
       stop(now);
       return false;
     }
@@ -49,6 +68,7 @@ class PumpController {
     }
     if (!healthy) {
       manual_requested_ = false;
+      sampling_ = false;
       status = "Inhibited - low battery / invalid or stale INA219 / current limit";
       return false;
     }
@@ -64,6 +84,19 @@ class PumpController {
     }
     const bool due = automatic && (!has_stopped_ || now - last_stop_ >= rest_ms);
     if (manual_requested_ || due) {
+      if (!sampling_) {
+        sampling_ = true;
+        baseline_started_ = now;
+        baseline_count_ = 0;
+        baseline_sum_ = 0.0f;
+      }
+      if (now - baseline_started_ < 3000U || baseline_count_ < 3) {
+        status = "Measuring resting battery voltage";
+        return false;
+      }
+      resting_voltage = baseline_sum_ / baseline_count_;
+      loaded_min_voltage = NAN;
+      sampling_ = false;
       manual_requested_ = false;
       running = true;
       started_ = now;
@@ -71,12 +104,17 @@ class PumpController {
       duration_ms_ = run_ms > 1800000U ? 1800000U : run_ms;
       status = "Pump running";
     } else {
+      sampling_ = false;
       status = automatic ? "Resting" : "Schedule disabled";
     }
     return running;
   }
 
  private:
+  bool sampling_ = false;
+  uint32_t baseline_started_ = 0;
+  uint32_t baseline_count_ = 0;
+  float baseline_sum_ = 0.0f;
   bool manual_requested_ = false;
   bool has_stopped_ = false;
   uint32_t started_ = 0;

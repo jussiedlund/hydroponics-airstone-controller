@@ -23,7 +23,7 @@ esphome:
     - pump_controller.h
   project:
     name: hydroponics.air_stone_controller
-    version: "0.2.0"
+    version: "0.3.0"
   on_boot:
     priority: 700
     then:
@@ -225,6 +225,7 @@ sensor:
               // INA219 bus voltage is VIN- to GND. Add shunt drop to recover VIN+.
               const float voltage = id(bus_voltage).state + id(shunt_voltage).state;
               const float current = id(battery_current).state;
+              id(controller).sample(id(last_sample_ms), voltage);
               id(battery_voltage).publish_state(voltage);
               id(battery_power).publish_state(voltage * current);
               // Separate discharge from charging for HA energy statistics.
@@ -237,6 +238,30 @@ sensor:
     state_class: measurement
     accuracy_decimals: 3
     update_interval: never
+  - platform: template
+    name: Pre-Pump Battery Voltage
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    lambda: return id(controller).resting_voltage;
+    update_interval: 1s
+  - platform: template
+    name: Minimum Pump Battery Voltage
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    lambda: return id(controller).loaded_min_voltage;
+    update_interval: 1s
+  - platform: template
+    name: Pump Voltage Sag
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    lambda: return id(controller).voltage_sag();
+    update_interval: 1s
   - platform: template
     name: Battery Power
     id: battery_power

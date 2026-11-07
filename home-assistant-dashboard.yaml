@@ -16,6 +16,9 @@ cards:
       - button.air_stone_controller_clear_safety_trip
       - binary_sensor.air_stone_controller_power_monitor_healthy
       - sensor.air_stone_controller_battery_voltage
+      - sensor.air_stone_controller_pre_pump_battery_voltage
+      - sensor.air_stone_controller_minimum_pump_battery_voltage
+      - sensor.air_stone_controller_pump_voltage_sag
       - sensor.air_stone_controller_battery_current
       - sensor.air_stone_controller_battery_power
       - sensor.air_stone_controller_energy_used
