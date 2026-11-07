@@ -8,7 +8,7 @@ encrypted native API, and pump-off boot conventions; this project does not
 inherit its deep-sleep cycle or board-specific brownout workaround.
 
 See [COMMISSIONING.md](COMMISSIONING.md) for observed installation results and
-the outstanding INA219 wiring check.
+the successful GPIO6/GPIO7 scan and remaining supply/current-direction checks.
 
 ## First use
 
@@ -79,8 +79,8 @@ usage; the timeout can still integrate up to five seconds of the last value.
 
 | Connection | Pin / route |
 | --- | --- |
-| INA219 SDA | GPIO4 |
-| INA219 SCL | GPIO5 |
+| INA219 SDA | GPIO6 |
+| INA219 SCL | GPIO7 |
 | INA219 VCC | ESP32 3V3 (I2C pull-ups must also be 3.3 V) |
 | INA219 GND | Common battery / ESP32 ground |
 | INA219 VIN+ | Protected battery positive |
@@ -125,9 +125,10 @@ on-resistance specified at 2.5/3.3 V or a suitable driver. Use a protected 1S
 cell/BMS, a fuse suited to wiring/load, and a regulator intended for an ESP32;
 do not connect a full 4.2 V cell directly to 3V3.
 
-GPIO4 and GPIO5 are ESP32-C6 strapping/JTAG pins. ESPHome warns about the I2C
-pull-ups; retained here to match the supplied wiring. If boot/debug problems
-occur, move SDA/SCL to verified non-strapping pins and update substitutions.
+SDA/SCL use GPIO6/GPIO7 after moving the connectors from GPIO4/GPIO5.
+GPIO6/GPIO7 are not strapping pins. They share external JTAG functions, so
+do not attach an external JTAG probe to these pins while using I2C; USB
+Serial/JTAG on GPIO12/GPIO13 remains available.
 
 ## Pump protections
 

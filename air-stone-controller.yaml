@@ -1,8 +1,8 @@
 substitutions:
   device_name: air-stone-controller
   friendly_name: Air Stone Controller
-  i2c_sda_pin: GPIO4
-  i2c_scl_pin: GPIO5
+  i2c_sda_pin: GPIO6
+  i2c_scl_pin: GPIO7
   pump_pin: GPIO18
   ina219_address: "0x40"
   shunt_resistance: "0.1 ohm"  # R100; verify the actual board marking.
